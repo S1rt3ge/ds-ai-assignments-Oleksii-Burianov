@@ -1,0 +1,19 @@
+CUSTOMER FEEDBACK ANALYSIS REPORT
+
+1. DATASET
+   Samples: 24778
+   offensive_language: 19189 (77.4%)
+   neither: 4159 (16.8%)
+   hate_speech: 1430 (5.8%)
+
+2. SENTIMENT
+   NEGATIVE: 15282 (61.7%)
+   POSITIVE: 5874 (23.7%)
+   NEUTRAL: 3622 (14.6%)
+
+3. TOPICS
+   Topic 1: hoes, hoe, bitches, niggas, don
+   Topic 2: bitch, ass, said, day, gett
+   Topic 3: bitch, nigga, ain, bitches, ass
+   Topic 4: bitch, fuck, bitches, don, pussy
+   Topic 5: pussy, trash, good, really, faggot

@@ -1,0 +1,18 @@
+SENTIMENT ANALYSIS RESULTS
+
+VADER:
+  NEGATIVE: 14938 (60.3%)
+  POSITIVE: 5408 (21.8%)
+  NEUTRAL: 4432 (17.9%)
+  Mean compound: -0.263
+
+TextBlob:
+  NEUTRAL: 13802 (55.7%)
+  NEGATIVE: 6112 (24.7%)
+  POSITIVE: 4864 (19.6%)
+  Mean polarity: -0.028
+
+Ensemble:
+  NEGATIVE: 15282 (61.7%)
+  POSITIVE: 5874 (23.7%)
+  NEUTRAL: 3622 (14.6%)
