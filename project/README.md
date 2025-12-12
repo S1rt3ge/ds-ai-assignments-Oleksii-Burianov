@@ -1,44 +1,14 @@
-# Research Assistant
+### Run Application
 
-Multi-Agent Research System with Intelligent Prompting
-
-## Quick Start
-
-### 1. Install Ollama
-
-Download and install from [https://ollama.ai/](https://ollama.ai/)
-
-### 2. Pull Models
-
-```bash
-ollama pull gemma3:1b
-ollama pull deepseek-r1:1.5b
-ollama pull ministral-3:3b
-```
-
-### 3. Install Dependencies
-
-```bash
-cd project
-pip install -e .
-```
-
-### 4. Run Application
-
-```bash
 python -m streamlit run src/ui/app.py
-```
-
 The application will open at `http://localhost:8501`
-
-## Features
 
 ### Supported Models
 
 - **gemma3:1b** - Fast, basic quality (1B parameters)
 - **deepseek-r1:1.5b** - Medium speed/quality (1.5B parameters)
 - **ministral-3:3b** - Slow, high quality (3B parameters)
-
+- 
 ### Prompting Strategies
 
 1. **System Role** - Clear role definition with direct instructions
@@ -78,71 +48,3 @@ project/
 ├── scripts/              # Utility scripts
 └── pyproject.toml        # Poetry configuration
 ```
-
-## Configuration
-
-The application uses local Ollama models by default. Configuration options can be set in `.env` file:
-
-```bash
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-## Code Quality
-
-The project uses:
-- **Black** for code formatting
-- **Ruff** for linting
-- **isort** for import sorting
-
-Configuration in `pyproject.toml`
-
-## Dependencies
-
-### Core Dependencies
-- `ollama` - Ollama Python client
-- `streamlit` - Web UI framework
-- `pydantic` - Data validation
-- `tenacity` - Retry logic
-- `httpx` - HTTP client
-- `langgraph` - Agent framework (for future use)
-
-### Optional Dependencies (for Week 7 RAG)
-```bash
-pip install -e ".[rag]"
-```
-
-This installs:
-- `datasets` - HuggingFace datasets
-- `pgvector` - Vector database
-- `sentence-transformers` - Text embeddings
-
-## Troubleshooting
-
-### Ollama not responding
-```bash
-ollama list
-ollama serve
-```
-
-### Model not found
-```bash
-ollama pull gemma3:1b
-```
-
-### Module import errors
-```bash
-pip install -e .
-```
-
-## Week 5 Status
-
-All deliverables completed:
-
-- Project Setup (Poetry, code quality tools)
-- Multi-LLM Client (3 models, streaming, retry logic)
-- Prompt Management (4 strategies)
-- Simple Interface (Streamlit UI)
-
-## License
-
-This project is for educational purposes.
