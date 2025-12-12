@@ -1,0 +1,52 @@
+[tool.poetry]
+name = "research-assistant"
+version = "0.1.0"
+description = "Multi-Agent Research Assistant System with RAG, intelligent routing, and tool use"
+authors = ["Oleksii Burianov"]
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+ollama = "^0.4.4"
+httpx = "^0.28.1"
+streamlit = "^1.41.1"
+langgraph = "^0.2.60"
+pydantic = "^2.10.5"
+tenacity = "^9.0.0"
+python-dotenv = "^1.0.1"
+datasets = {version = "^3.2.0", optional = true}
+pgvector = {version = "^0.3.6", optional = true}
+sentence-transformers = {version = "^3.3.1", optional = true}
+
+[tool.poetry.extras]
+rag = ["datasets", "pgvector", "sentence-transformers"]
+
+[tool.poetry.group.dev.dependencies]
+black = "^25.1.0"
+isort = "^6.0.1"
+ruff = "^0.11.2"
+pytest = "^8.3.4"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
+[tool.isort]
+profile = "black"
+line_length = 120
+multi_line_output = 3
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = ["*.ipynb"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
