@@ -1,7 +1,28 @@
-### Run Application
+# Research Assistant
 
-python -m streamlit run src/ui/app.py
-The application will open at `http://localhost:8501`
+Multi-Agent Research System with Intelligent Routing & Prompting
+
+## Installation
+
+
+pip install poetry
+
+
+poetry install
+
+
+Install Ollama (for local models):
+
+ollama pull gemma3:1b
+ollama pull deepseek-r1:1.5b
+ollama pull ministral-3:3b
+
+
+## Run Application
+
+poetry run streamlit run src/ui/app.py
+
+Application opens at http://localhost:8501
 
 ### Supported Models
 
