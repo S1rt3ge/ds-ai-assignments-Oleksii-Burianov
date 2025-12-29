@@ -96,7 +96,7 @@ class RoutingStrategy:
         if complexity_score < 40:
             return "ollama/gemma3:1b"
         elif complexity_score < 55:
-            return "groq/openai/gpt-oss-120b"
+            return "ollama/ministral-3:3b"
         elif complexity_score < 70:
             return "cerebras/llama-3.3-70b"
         elif complexity_score < 85:
@@ -110,7 +110,7 @@ class RoutingStrategy:
         elif complexity_score < 70:
             return "ollama/deepseek-r1:1.5b"
         else:
-            return "groq/openai/gpt-oss-120b"
+            return "ollama/ministral-3:3b"
 
     def _quality_optimized_selection(self, complexity_score: int, token_count: int) -> str:
         if complexity_score < 20:
@@ -126,7 +126,7 @@ class RoutingStrategy:
         if complexity_score < 30:
             return "ollama/gemma3:1b"
         else:
-            return "groq/openai/gpt-oss-120b"
+            return "cerebras/llama-3.3-70b"
 
     def get_model_capabilities(self, model_key: str) -> ModelCapabilities:
         if model_key not in MODEL_REGISTRY:

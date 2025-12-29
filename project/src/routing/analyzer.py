@@ -64,9 +64,6 @@ class QueryAnalyzer:
         "sophisticated",
     ]
 
-    def __init__(self):
-        pass
-
     def analyze(self, query: str) -> QueryAnalysis:
         query_lower = query.lower()
         word_count = len(query.split())

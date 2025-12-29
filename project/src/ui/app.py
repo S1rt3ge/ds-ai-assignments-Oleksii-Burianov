@@ -1,13 +1,17 @@
+import os
+import traceback
+
 import streamlit as st
 
 from src.llm import Message, MessageRole, get_llm_client
 from src.prompts import PromptManager, PromptStrategy
 from src.routing import QueryRouter, RoutingMode
 from src.routing.strategies import MODEL_REGISTRY
+from src.rag import RAGPipeline
 
 st.set_page_config(
     page_title="Research Assistant",
-    page_icon=":books:",
+    page_icon="book",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -20,6 +24,10 @@ if "last_routing_decision" not in st.session_state:
     st.session_state.last_routing_decision = None
 if "total_cost_savings" not in st.session_state:
     st.session_state.total_cost_savings = 0.0
+if "rag_pipeline" not in st.session_state:
+    st.session_state.rag_pipeline = RAGPipeline()
+if "last_rag_context" not in st.session_state:
+    st.session_state.last_rag_context = None
 
 ALL_MODELS = {
     "Auto Route (Recommended)": "auto",
@@ -87,6 +95,68 @@ def main():
         current_strategy_info = next(s for s in strategies if s["name"] == selected_strategy.value)
         st.caption(current_strategy_info["description"])
 
+        st.markdown("---")
+        st.subheader("RAG Settings")
+        rag_enabled = st.toggle("Enable RAG", value=False, help="Retrieve relevant documents to ground responses")
+
+        if rag_enabled:
+            top_k = st.slider("Retrieved chunks", 1, 10, 5, help="Number of document chunks to retrieve")
+            chunking_strategy = st.selectbox(
+                "Chunking strategy",
+                ["fixed", "recursive"],
+                help="How to split documents into chunks"
+            )
+
+            st.markdown("**Document Management**")
+            uploaded_files = st.file_uploader(
+                "Upload documents",
+                type=["pdf", "txt", "md"],
+                accept_multiple_files=True,
+                help="Upload one or more PDF, TXT, or Markdown files"
+            )
+
+            if uploaded_files:
+                docs_dir = os.path.join("data", "documents")
+                os.makedirs(docs_dir, exist_ok=True)
+
+                total_chunks = 0
+                success_count = 0
+
+                for uploaded_file in uploaded_files:
+                    with st.spinner(f"Indexing {uploaded_file.name}..."):
+                        try:
+                            file_path = os.path.join(docs_dir, uploaded_file.name)
+
+                            with open(file_path, "wb") as f:
+                                f.write(uploaded_file.getbuffer())
+
+                            chunks_indexed = st.session_state.rag_pipeline.index_document(
+                                file_path, chunking_strategy=chunking_strategy
+                            )
+
+                            total_chunks += chunks_indexed
+                            success_count += 1
+                            st.success(f"{uploaded_file.name}: {chunks_indexed} chunks indexed")
+                        except Exception as e:
+                            st.error(f"{uploaded_file.name}: {e}")
+                            st.code(traceback.format_exc())
+
+                if success_count > 0:
+                    st.info(f"Indexed {success_count} document(s), {total_chunks} total chunks")
+
+            doc_count = st.session_state.rag_pipeline.get_indexed_count()
+            st.metric("Indexed chunks", doc_count)
+
+            if doc_count > 0 and st.button("Clear All Documents", use_container_width=True):
+                st.session_state.rag_pipeline.clear_index()
+                st.session_state.last_rag_context = None
+                st.success("All documents cleared")
+                st.rerun()
+        else:
+            top_k = 5
+            chunking_strategy = "fixed"
+
+        st.markdown("---")
         with st.expander("Advanced Options"):
             st.markdown("**Temperature** - Controls randomness in responses")
             st.caption("Lower (0.0) = More focused and deterministic")
@@ -144,8 +214,16 @@ def main():
 
                 with st.spinner(spinner_text):
                     try:
-                        prompt_manager = PromptManager(strategy=selected_strategy)
-                        messages = prompt_manager.create_prompt(user_query)
+                        if rag_enabled and st.session_state.rag_pipeline.get_indexed_count() > 0:
+                            rag_context = st.session_state.rag_pipeline.query(user_query, top_k=top_k)
+                            st.session_state.last_rag_context = rag_context
+                            rag_prompt = st.session_state.rag_pipeline.generate_rag_prompt(user_query, rag_context)
+                            messages = [Message(role=MessageRole.USER, content=rag_prompt)]
+                        else:
+                            st.session_state.last_rag_context = None
+                            prompt_manager = PromptManager(strategy=selected_strategy)
+                            messages = prompt_manager.create_prompt(user_query)
+
                         client = get_llm_client(provider, model_name=model_name)
 
                         if use_streaming:
@@ -164,6 +242,15 @@ def main():
 
                             st.markdown("### Response")
                             st.markdown(response.content)
+
+                            if rag_enabled and st.session_state.last_rag_context:
+                                st.markdown("---")
+                                st.markdown("### Sources")
+                                citations = st.session_state.rag_pipeline.extract_citations(
+                                    st.session_state.last_rag_context
+                                )
+                                for citation in citations:
+                                    st.caption(f"- {citation}")
 
                         if is_auto_route and st.session_state.last_response:
                             metadata = st.session_state.last_response
@@ -214,6 +301,20 @@ def main():
                             st.info(f"Check that your {provider.upper()}_API_KEY is set in the .env file")
 
     with col2:
+        if rag_enabled and st.session_state.last_rag_context:
+            st.subheader("RAG Context")
+            rag_ctx = st.session_state.last_rag_context
+
+            st.metric("Retrieval time", f"{rag_ctx.retrieval_time_ms:.1f}ms")
+            st.metric("Chunks retrieved", len(rag_ctx.results))
+
+            with st.expander("Retrieved Chunks"):
+                for result in rag_ctx.results:
+                    st.markdown(f"**Rank {result.rank}** (Score: {result.score:.3f})")
+                    st.caption(f"File: {result.chunk.metadata.filename}, Chunk: {result.chunk.chunk_index}")
+                    st.text(result.chunk.text[:200] + "...")
+                    st.markdown("---")
+
         if st.session_state.last_routing_decision:
             st.subheader("Routing Decision")
             decision = st.session_state.last_routing_decision

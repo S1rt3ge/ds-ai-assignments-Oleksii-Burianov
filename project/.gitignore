@@ -48,6 +48,8 @@ Thumbs.db
 data/*.pdf
 data/*.txt
 data/*.docx
+data/documents/
+data/chroma/
 !data/.gitkeep
 
 # Logs

@@ -49,7 +49,7 @@ class RoutingDecision(BaseModel):
 
     def format_decision(self) -> str:
         lines = [
-            f"🤖 Auto-Routing Decision",
+            f"Auto-Routing Decision",
             f"",
             f"Selected: {self.provider}/{self.model_name}",
             f"Reason: {self.reason}",
