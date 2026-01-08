@@ -9,7 +9,7 @@ from src.agents.definitions import (
     create_synthesis_agent,
 )
 from src.agents.models import ResearchResult, RetrievalSource
-from src.agents.tools import RAGSearchTool
+from src.tools import RAGSearchTool
 from src.routing.router import QueryRouter
 from src.rag.pipeline import RAGPipeline
 from src.llm.client import get_llm_client
@@ -23,7 +23,7 @@ class ResearchCrew:
     def __init__(
         self,
         llm_provider: str = "ollama",
-        llm_model: str = "mistral:latest",
+        llm_model: str = "ministral-3b:latest",
         router: Optional[QueryRouter] = None,
         pipeline: Optional[RAGPipeline] = None,
         verbose: bool = True,
@@ -138,6 +138,7 @@ class ResearchCrew:
     def research(self, query: str) -> ResearchResult:
         """Execute the research workflow."""
         logger.info(f"Starting research for query: {query}")
+        logger.info(f"Indexed documents: {self._has_indexed_documents()}")
 
         planning_task = self._create_planning_task(query)
         retrieval_task = self._create_retrieval_task(query, planning_task)
@@ -158,6 +159,7 @@ class ResearchCrew:
             memory=False,
         )
 
+        logger.info(f"Starting crew with {len(tasks)} tasks")
         result = crew.kickoff()
 
         return self._parse_result(query, result, tasks)

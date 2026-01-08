@@ -11,7 +11,8 @@ def create_planner_agent(
     llm: any,
     router: Optional[QueryRouter] = None,
 ) -> Agent:
-    """Create the Research Strategy Planner agent."""
+    if router is None:
+        router = QueryRouter()
     query_tool = QueryAnalysisTool(router=router)
     return Agent(
         role="Research Strategy Planner",
@@ -32,7 +33,8 @@ def create_retrieval_agent(
     llm: any,
     pipeline: Optional[RAGPipeline] = None,
 ) -> Agent:
-    """Create the Information Retrieval Specialist agent."""
+    if pipeline is None:
+        pipeline = RAGPipeline()
     rag_tool = RAGSearchTool(pipeline=pipeline)
     return Agent(
         role="Information Retrieval Specialist",

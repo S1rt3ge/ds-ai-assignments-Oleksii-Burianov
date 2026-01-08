@@ -46,7 +46,7 @@ class QueryAnalysisTool(BaseTool):
             return result
         except Exception as e:
             logger.error(f"Query analysis failed: {e}")
-            return f"Error analyzing query: {str(e)}"
+            return f"Error analyzing query: {str(e)}. Check if routing system is initialized."
 
 
 class RAGSearchInput(BaseModel):
@@ -89,7 +89,7 @@ class RAGSearchTool(BaseTool):
             return output
         except Exception as e:
             logger.error(f"RAG search failed: {e}")
-            return f"Error during RAG search: {str(e)}"
+            return f"Error during RAG search: {str(e)}. Check if documents are indexed."
 
     def get_indexed_count(self) -> int:
         if self.pipeline:
