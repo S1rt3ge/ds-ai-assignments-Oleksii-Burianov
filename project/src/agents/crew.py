@@ -23,10 +23,10 @@ class ResearchCrew:
     def __init__(
         self,
         llm_provider: str = "ollama",
-        llm_model: str = "ministral-3b:latest",
+        llm_model: str = "ministral-3:3b",
         router: Optional[QueryRouter] = None,
         pipeline: Optional[RAGPipeline] = None,
-        verbose: bool = True,
+        verbose: bool = False,
     ):
         self.llm_provider = llm_provider
         self.llm_model = llm_model

@@ -15,8 +15,8 @@ class ResearchAssistant:
     def __init__(
         self,
         llm_provider: str = "ollama",
-        llm_model: str = "mistral:latest",
-        verbose: bool = True,
+        llm_model: str = "ministral-3:3b",
+        verbose: bool = False,
     ):
         self.llm_provider = llm_provider
         self.llm_model = llm_model
@@ -80,8 +80,8 @@ class ResearchAssistant:
 
 def create_research_assistant(
     llm_provider: str = "ollama",
-    llm_model: str = "mistral:latest",
-    verbose: bool = True,
+    llm_model: str = "ministral-3:3b",
+    verbose: bool = False,
 ) -> ResearchAssistant:
     """Factory function to create a ResearchAssistant instance."""
     return ResearchAssistant(

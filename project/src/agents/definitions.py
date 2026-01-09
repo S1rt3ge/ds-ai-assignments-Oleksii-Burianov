@@ -24,7 +24,7 @@ def create_planner_agent(
         ),
         tools=[query_tool],
         llm=llm,
-        verbose=True,
+        verbose=False,
         allow_delegation=False,
     )
 
@@ -46,7 +46,7 @@ def create_retrieval_agent(
         ),
         tools=[rag_tool],
         llm=llm,
-        verbose=True,
+        verbose=False,
         allow_delegation=False,
     )
 
@@ -63,6 +63,6 @@ def create_synthesis_agent(llm: any) -> Agent:
         ),
         tools=[],
         llm=llm,
-        verbose=True,
+        verbose=False,
         allow_delegation=False,
     )

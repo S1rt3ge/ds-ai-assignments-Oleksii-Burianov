@@ -28,7 +28,11 @@ class QueryAnalysisTool(BaseTool):
         super().__init__(**kwargs)
         self.router = router or QueryRouter(mode=RoutingMode.BALANCED)
 
-    def _run(self, query: str) -> str:
+    def _run(self, query: str = None, **kwargs) -> str:
+        if query is None:
+            query = kwargs.get("properties", {}).get("query", "")
+        if not query:
+            return "Error: No query provided"
         try:
             decision, analysis = self.router.route(query)
             needs_rag = analysis.complexity_score >= 30 or analysis.question_type in ["analysis", "reasoning"]
@@ -67,7 +71,13 @@ class RAGSearchTool(BaseTool):
         super().__init__(**kwargs)
         self.pipeline = pipeline or RAGPipeline()
 
-    def _run(self, query: str, top_k: int = 5) -> str:
+    def _run(self, query: str = None, top_k: int = 5, **kwargs) -> str:
+        if query is None:
+            props = kwargs.get("properties", {})
+            query = props.get("query", "")
+            top_k = props.get("top_k", 5)
+        if not query:
+            return "Error: No query provided"
         try:
             indexed_count = self.pipeline.get_indexed_count()
             if indexed_count == 0:
