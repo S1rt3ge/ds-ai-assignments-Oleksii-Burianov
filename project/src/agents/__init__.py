@@ -6,7 +6,7 @@ from src.agents.models import (
     ResearchState,
     ResearchResult,
 )
-from src.tools import QueryAnalysisTool, RAGSearchTool
+from src.tools import QueryAnalysisTool, RAGSearchTool, SummarizerTool, FactCheckerTool
 from src.agents.definitions import (
     create_planner_agent,
     create_retrieval_agent,
@@ -24,6 +24,8 @@ __all__ = [
     "ResearchResult",
     "QueryAnalysisTool",
     "RAGSearchTool",
+    "SummarizerTool",
+    "FactCheckerTool",
     "create_planner_agent",
     "create_retrieval_agent",
     "create_synthesis_agent",

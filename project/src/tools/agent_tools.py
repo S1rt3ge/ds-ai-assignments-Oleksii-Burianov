@@ -105,3 +105,109 @@ class RAGSearchTool(BaseTool):
         if self.pipeline:
             return self.pipeline.get_indexed_count()
         return 0
+
+
+class SummarizerInput(BaseModel):
+    text: str = Field(description="The text to summarize")
+    max_sentences: int = Field(default=3, description="Maximum sentences in summary", ge=1, le=10)
+
+
+class SummarizerTool(BaseTool):
+    name: str = "summarizer"
+    description: str = (
+        "Summarizes long text into key points. "
+        "Returns a concise summary with the main ideas."
+    )
+    args_schema: Type[BaseModel] = SummarizerInput
+    llm_client: Optional[any] = None
+
+    def __init__(self, llm_client: Optional[any] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.llm_client = llm_client
+
+    def _run(self, text: str = None, max_sentences: int = 3, **kwargs) -> str:
+        if text is None:
+            props = kwargs.get("properties", {})
+            text = props.get("text", "")
+            max_sentences = props.get("max_sentences", 3)
+        if not text:
+            return "Error: No text provided"
+        if len(text) < 100:
+            return f"Text too short to summarize. Original: {text}"
+        try:
+            sentences = text.replace("!", ".").replace("?", ".").split(".")
+            sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
+            if len(sentences) <= max_sentences:
+                return f"Summary: {text}"
+            key_sentences = sentences[:max_sentences]
+            summary = ". ".join(key_sentences) + "."
+            return (
+                f"Summary ({max_sentences} key points):\n{summary}\n\n"
+                f"Original length: {len(text)} chars, Summary length: {len(summary)} chars"
+            )
+        except Exception as e:
+            logger.error(f"Summarization failed: {e}")
+            return f"Error summarizing text: {str(e)}"
+
+
+class FactCheckerInput(BaseModel):
+    claim: str = Field(description="The claim or statement to verify")
+    context: str = Field(default="", description="Optional context to check against")
+
+
+class FactCheckerTool(BaseTool):
+    name: str = "fact_checker"
+    description: str = (
+        "Verifies a claim against provided context or indexed documents. "
+        "Returns verification result with supporting evidence."
+    )
+    args_schema: Type[BaseModel] = FactCheckerInput
+    pipeline: Optional[RAGPipeline] = None
+
+    def __init__(self, pipeline: Optional[RAGPipeline] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.pipeline = pipeline
+
+    def _run(self, claim: str = None, context: str = "", **kwargs) -> str:
+        if claim is None:
+            props = kwargs.get("properties", {})
+            claim = props.get("claim", "")
+            context = props.get("context", "")
+        if not claim:
+            return "Error: No claim provided"
+        try:
+            if not context and self.pipeline and self.pipeline.get_indexed_count() > 0:
+                rag_context = self.pipeline.query(claim, top_k=3)
+                if rag_context.results:
+                    context = " ".join([r.chunk.text for r in rag_context.results])
+            if not context:
+                return (
+                    f"Claim: {claim}\n"
+                    f"Verification: UNVERIFIED - No context available to check against.\n"
+                    f"Recommendation: Provide context or index relevant documents."
+                )
+            claim_lower = claim.lower()
+            context_lower = context.lower()
+            claim_words = set(claim_lower.split())
+            context_words = set(context_lower.split())
+            overlap = claim_words.intersection(context_words)
+            overlap_ratio = len(overlap) / len(claim_words) if claim_words else 0
+            if overlap_ratio > 0.6:
+                status = "LIKELY SUPPORTED"
+                confidence = "high"
+            elif overlap_ratio > 0.3:
+                status = "PARTIALLY SUPPORTED"
+                confidence = "medium"
+            else:
+                status = "NOT DIRECTLY SUPPORTED"
+                confidence = "low"
+            return (
+                f"Claim: {claim}\n"
+                f"Verification: {status}\n"
+                f"Confidence: {confidence}\n"
+                f"Evidence overlap: {overlap_ratio:.0%}\n"
+                f"Matching terms: {', '.join(list(overlap)[:10])}"
+            )
+        except Exception as e:
+            logger.error(f"Fact checking failed: {e}")
+            return f"Error checking fact: {str(e)}"
