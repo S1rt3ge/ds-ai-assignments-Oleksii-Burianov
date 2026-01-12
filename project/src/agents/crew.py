@@ -51,7 +51,7 @@ class ResearchCrew:
         llm = self._get_crewai_llm()
         self._agents["planner"] = create_planner_agent(llm=llm, router=self.router)
         self._agents["retrieval"] = create_retrieval_agent(llm=llm, pipeline=self.pipeline)
-        self._agents["synthesis"] = create_synthesis_agent(llm=llm)
+        self._agents["synthesis"] = create_synthesis_agent(llm=llm, pipeline=self.pipeline)
 
     def _create_planning_task(self, query: str, human_input: bool = False) -> Task:
         """Create the planning task."""

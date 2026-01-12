@@ -2,7 +2,7 @@ from typing import Optional
 
 from crewai import Agent
 
-from src.tools import QueryAnalysisTool, RAGSearchTool
+from src.tools import QueryAnalysisTool, RAGSearchTool, SummarizerTool, FactCheckerTool
 from src.routing.router import QueryRouter
 from src.rag.pipeline import RAGPipeline
 
@@ -51,17 +51,21 @@ def create_retrieval_agent(
     )
 
 
-def create_synthesis_agent(llm: any) -> Agent:
-    """Create the Research Report Writer agent."""
+def create_synthesis_agent(
+    llm: any,
+    pipeline: Optional[RAGPipeline] = None,
+) -> Agent:
+    summarizer = SummarizerTool()
+    fact_checker = FactCheckerTool(pipeline=pipeline)
     return Agent(
         role="Research Report Writer",
         goal="Create comprehensive answers with proper citations from the retrieved information",
         backstory=(
             "You are an expert in synthesizing information and academic writing. "
             "You create clear, well-structured answers that properly cite sources. "
-            "You ensure accuracy by grounding responses in the provided context."
+            "You can summarize long texts and verify facts against sources."
         ),
-        tools=[],
+        tools=[summarizer, fact_checker],
         llm=llm,
         verbose=False,
         allow_delegation=False,
