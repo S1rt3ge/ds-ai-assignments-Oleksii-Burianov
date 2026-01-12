@@ -1,7 +1,3 @@
-# Data Science & AI Intern Assignments
-
-This repository serves as a template for assignments throughout the internship program. Interns should create their own repository from this template and use it to organize all weekly assignments.
-
 ## Getting Started
 
 1. Click the "Use this template" button at the top of this GitHub repository
@@ -16,24 +12,6 @@ This repository serves as a template for assignments throughout the internship p
 
 - Python 3.12+
 - Poetry for dependency management
-
-### Install Python
-
-Ensure you have Python 3.12 installed. You can download it from the [official website](https://www.python.org/downloads/).
-
-### Install Poetry
-
-Install Poetry by running:
-
-```bash
-# For Unix/Linux/OS X/wsl
-curl -sSL https://install.python-poetry.org | python3 -
-
-# For Windows (PowerShell)
-(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
-
-```
-For more details, visit the [Poetry documentation](https://python-poetry.org/docs/#installation).
 
 ### Set Up the Virtual Environment
 
@@ -50,81 +28,90 @@ Install all project dependencies, including development tools:
 ```bash
 poetry install
 ```
-### Install additional packages as needed:
-
-```bash
-poetry add package-name
-```
 
 ## Code Quality Tools
 
-This template includes several code quality tools to help write clean, consistent code:
-
-* `Black`: Automatic code formatter
-* `isort`: Import organizer
-* `Ruff`: Fast Python linter
-
 These tools are configured in `pyproject.toml` with a line length of 120 characters.
 
-### How to Use the Tools
 
-* Black
-Format your code:
+### Architecture
 
+User Query -> Planner Agent -> Conditional Routing -> Retrieval Agent (if needed) -> Synthesis Agent -> Result
+
+Workflow:
+1. Planner analyzes query complexity and decides if RAG is needed
+2. If needs_rag=true and documents are indexed, Retrieval agent searches documents
+3. If needs_rag=false or no documents, skip directly to Synthesis
+4. Synthesis agent generates final answer with citations
+
+### Agents
+
+Planner Agent:
+- Role: Research Strategy Planner
+- Tool: QueryAnalysisTool
+- Task: Analyze query complexity, determine question type, decide if RAG needed
+
+Retrieval Agent:
+- Role: Information Retrieval Specialist
+- Tool: RAGSearchTool
+- Task: Search indexed documents, return relevant chunks with sources
+
+Synthesis Agent:
+- Role: Research Report Writer
+- Tools: SummarizerTool, FactCheckerTool
+- Task: Generate answer with citations, summarize text, verify facts
+
+### Tools
+
+QueryAnalysisTool - analyzes query complexity (0-100), detects question type
+RAGSearchTool - semantic search over indexed documents
+SummarizerTool - extracts key sentences from text
+FactCheckerTool - verifies claims against documents
+
+### Setup
+
+1. Install:
 ```
-poetry run black .
+poetry install
 ```
 
-isort
-Sort your imports:
-
+2. Create .env file:
 ```
-poetry run isort .
-```
-
-Ruff
-Analyze your code for linting errors:
-
-```
-poetry run ruff check .
+OLLAMA_HOST=http://localhost:11434
+OPENROUTER_API_KEY=your_key
 ```
 
-## Repository Structure
-
-This repository is organized by weeks, with a separate folder for each week's assignments:
+3. Start Ollama:
 ```
-├── weeks/
-│   ├── ...
-│   ├── week7/  # RAG & AI Agents
-│   └── ...
-└── capstone/  # Final project
+ollama pull your_models
 ```
 
-For each week of the program:
+### Usage
 
-1. Receive the week's learning materials and assignment instructions from mentors
-2. Work in the corresponding week's folder in this repository
-3. Create the following components in the week's folder (when needed):
-    * notebooks/ : Jupyter notebooks for exploration and analysis
-    * src/ : Python modules and scripts
-    * data/ : Data files or scripts to load data
-3. Commit work regularly with descriptive commit messages
-4. Push to GitHub repository
-5. Notify mentor when complete
+Run UI:
+```
+cd project
+poetry run streamlit run src/ui/app.py
+```
 
-## Assignment Structure Guidelines
+Multi-Agent Mode in UI:
+1. Enable "Multi-Agent System" toggle in sidebar
+2. Select provider and model
+3. Upload and index documents if needed
+4. Enter query
 
-Each week's assignment should typically include:
+### Demo Queries
 
-1. A clear `Report` documenting:
-    * The approach taken
-    * Key findings and results
-    * Any challenges encountered and how they were addressed
-    * Instructions for running the code
-2. Well-organized code:
-    * Document functions and classes
-    * Separate code into modules where appropriate
-3. Notebooks for exploration:
-    * Include markdown cells to explain reasoning
-    * Keep outputs in the notebook
-    * Clean up exploration work before submission
+Simple (no RAG):
+```
+What is machine learning?
+```
+
+Complex (uses RAG):
+```
+Analyze the methodology and findings in the uploaded research paper.
+```
+
+### Export
+
+After running query, download results as MD or TXT from Export section.
