@@ -8,11 +8,9 @@ from src.agents.definitions import (
     create_retrieval_agent,
     create_synthesis_agent,
 )
-from src.agents.models import ResearchResult, RetrievalSource
-from src.tools import RAGSearchTool
+from src.agents.models import ResearchResult, ResearchState
 from src.routing.router import QueryRouter
 from src.rag.pipeline import RAGPipeline
-from src.llm.client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +25,17 @@ class ResearchCrew:
         router: Optional[QueryRouter] = None,
         pipeline: Optional[RAGPipeline] = None,
         verbose: bool = False,
+        human_in_the_loop: bool = False,
     ):
         self.llm_provider = llm_provider
         self.llm_model = llm_model
         self.router = router or QueryRouter()
         self.pipeline = pipeline or RAGPipeline()
         self.verbose = verbose
+        self.human_in_the_loop = human_in_the_loop
         self._llm = None
         self._agents = {}
+        self._state: Optional[ResearchState] = None
         self._setup_agents()
 
     def _get_crewai_llm(self):
@@ -52,7 +53,7 @@ class ResearchCrew:
         self._agents["retrieval"] = create_retrieval_agent(llm=llm, pipeline=self.pipeline)
         self._agents["synthesis"] = create_synthesis_agent(llm=llm)
 
-    def _create_planning_task(self, query: str) -> Task:
+    def _create_planning_task(self, query: str, human_input: bool = False) -> Task:
         """Create the planning task."""
         return Task(
             description=(
@@ -76,50 +77,7 @@ class ResearchCrew:
                 "- question_type: the type of question detected"
             ),
             agent=self._agents["planner"],
-        )
-
-    def _create_retrieval_task(self, query: str, planning_task: Task) -> Task:
-        """Create the retrieval task."""
-        return Task(
-            description=(
-                f"Based on the planning analysis, search for relevant information.\n\n"
-                f"Query: {query}\n\n"
-                f"Use the rag_search tool to find relevant documents.\n"
-                f"If the planner indicated needs_rag=false, you may skip retrieval.\n"
-                f"Return the retrieved context with source information."
-            ),
-            expected_output=(
-                "Retrieved context containing:\n"
-                "- Relevant text passages from documents\n"
-                "- Source citations (filename, chunk index)\n"
-                "- Relevance scores\n"
-                "If no retrieval needed, state that clearly."
-            ),
-            agent=self._agents["retrieval"],
-            context=[planning_task],
-        )
-
-    def _create_synthesis_task(
-        self, query: str, planning_task: Task, retrieval_task: Task
-    ) -> Task:
-        """Create the synthesis task."""
-        return Task(
-            description=(
-                f"Create a comprehensive answer to the user's query.\n\n"
-                f"Query: {query}\n\n"
-                f"Use the planning analysis and retrieved context to formulate your answer.\n"
-                f"If context was retrieved, include inline citations like [Source 1: filename].\n"
-                f"If no context was available, provide a direct answer based on your knowledge.\n"
-                f"Be accurate, concise, and well-structured."
-            ),
-            expected_output=(
-                "A well-structured answer containing:\n"
-                "- Direct response to the query\n"
-                "- Inline citations if sources were used\n"
-                "- Clear, accurate information"
-            ),
-            agent=self._agents["synthesis"],
-            context=[planning_task, retrieval_task],
+            human_input=human_input,
         )
 
     def _should_skip_retrieval(self, planning_output: str) -> bool:
@@ -135,24 +93,54 @@ class ResearchCrew:
         """Check if there are indexed documents available."""
         return self.pipeline.get_indexed_count() > 0
 
+    def _run_planning_phase(self, query: str) -> str:
+        """Run planning phase separately to get routing decision."""
+        planning_task = self._create_planning_task(query, human_input=self.human_in_the_loop)
+        planning_crew = Crew(
+            agents=[self._agents["planner"]],
+            tasks=[planning_task],
+            process=Process.sequential,
+            verbose=self.verbose,
+            memory=False,
+        )
+        result = planning_crew.kickoff()
+        return str(result)
+
+    def _update_state_from_planning(self, planning_output: str):
+        """Update shared state from planning output."""
+        self._state.complexity_score = self._extract_complexity(planning_output)
+        self._state.strategy = self._extract_strategy(planning_output)
+        self._state.needs_rag = not self._should_skip_retrieval(planning_output)
+        if "question_type:" in planning_output.lower():
+            parts = planning_output.lower().split("question_type:")
+            if len(parts) > 1:
+                self._state.question_type = parts[1].split("\n")[0].strip()
+
     def research(self, query: str) -> ResearchResult:
-        """Execute the research workflow."""
+        """Execute the research workflow with conditional routing."""
         logger.info(f"Starting research for query: {query}")
         logger.info(f"Indexed documents: {self._has_indexed_documents()}")
+        logger.info(f"Human-in-the-loop: {self.human_in_the_loop}")
 
-        planning_task = self._create_planning_task(query)
-        retrieval_task = self._create_retrieval_task(query, planning_task)
-        synthesis_task = self._create_synthesis_task(query, planning_task, retrieval_task)
+        self._state = ResearchState(query=query)
 
-        tasks = [planning_task, retrieval_task, synthesis_task]
+        planning_output = self._run_planning_phase(query)
+        self._update_state_from_planning(planning_output)
+        logger.info(f"Planning complete - needs_rag: {self._state.needs_rag}, complexity: {self._state.complexity_score}")
 
-        if not self._has_indexed_documents():
-            logger.info("No indexed documents, using simplified workflow")
-            tasks = [planning_task, synthesis_task]
-            synthesis_task.context = [planning_task]
+        has_docs = self._has_indexed_documents()
+        should_retrieve = self._state.needs_rag and has_docs
+
+        if should_retrieve:
+            logger.info("Conditional routing: executing retrieval phase")
+            tasks, agents = self._build_full_workflow(query, planning_output)
+        else:
+            reason = "no documents indexed" if not has_docs else "planner decided RAG not needed"
+            logger.info(f"Conditional routing: skipping retrieval ({reason})")
+            tasks, agents = self._build_synthesis_only_workflow(query, planning_output)
 
         crew = Crew(
-            agents=list(self._agents.values()),
+            agents=agents,
             tasks=tasks,
             process=Process.sequential,
             verbose=self.verbose,
@@ -162,27 +150,55 @@ class ResearchCrew:
         logger.info(f"Starting crew with {len(tasks)} tasks")
         result = crew.kickoff()
 
-        return self._parse_result(query, result, tasks)
+        self._state.final_answer = str(result)
+        self._state.citations = self._extract_citations(str(result))
 
-    def _parse_result(self, query: str, crew_result: any, tasks: list) -> ResearchResult:
-        """Parse crew result into ResearchResult model."""
-        answer = str(crew_result)
-        planning_output = ""
-        if tasks and hasattr(tasks[0], "output") and tasks[0].output:
-            planning_output = str(tasks[0].output)
+        return self._build_result(should_retrieve)
 
-        complexity_score = self._extract_complexity(planning_output)
-        used_rag = len(tasks) > 2 and not self._should_skip_retrieval(planning_output)
-        strategy = self._extract_strategy(planning_output)
-        citations = self._extract_citations(answer)
+    def _build_full_workflow(self, query: str, planning_output: str):
+        """Build workflow with retrieval."""
+        retrieval_task = Task(
+            description=(
+                f"Search for relevant information for: {query}\n\n"
+                f"Planning context: {planning_output}\n\n"
+                f"Use the rag_search tool to find relevant documents."
+            ),
+            expected_output="Retrieved context with source citations.",
+            agent=self._agents["retrieval"],
+        )
+        synthesis_task = Task(
+            description=(
+                f"Create a comprehensive answer for: {query}\n\n"
+                f"Use the retrieved context to formulate your answer with citations."
+            ),
+            expected_output="Well-structured answer with inline citations.",
+            agent=self._agents["synthesis"],
+            context=[retrieval_task],
+        )
+        return [retrieval_task, synthesis_task], [self._agents["retrieval"], self._agents["synthesis"]]
 
+    def _build_synthesis_only_workflow(self, query: str, planning_output: str):
+        """Build workflow without retrieval."""
+        synthesis_task = Task(
+            description=(
+                f"Create a comprehensive answer for: {query}\n\n"
+                f"Planning context: {planning_output}\n\n"
+                f"Provide a direct answer based on your knowledge."
+            ),
+            expected_output="Well-structured answer.",
+            agent=self._agents["synthesis"],
+        )
+        return [synthesis_task], [self._agents["synthesis"]]
+
+    def _build_result(self, used_rag: bool) -> ResearchResult:
+        """Build final result from state."""
         return ResearchResult(
-            query=query,
-            answer=answer,
-            citations=citations,
+            query=self._state.query,
+            answer=self._state.final_answer,
+            citations=self._state.citations,
             used_rag=used_rag,
-            complexity_score=complexity_score,
-            strategy=strategy,
+            complexity_score=self._state.complexity_score,
+            strategy=self._state.strategy,
             sources=[],
         )
 

@@ -3,6 +3,7 @@ from src.agents.models import (
     RetrievalOutput,
     RetrievalSource,
     SynthesisOutput,
+    ResearchState,
     ResearchResult,
 )
 from src.tools import QueryAnalysisTool, RAGSearchTool
@@ -19,6 +20,7 @@ __all__ = [
     "RetrievalOutput",
     "RetrievalSource",
     "SynthesisOutput",
+    "ResearchState",
     "ResearchResult",
     "QueryAnalysisTool",
     "RAGSearchTool",

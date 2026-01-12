@@ -17,10 +17,12 @@ class ResearchAssistant:
         llm_provider: str = "ollama",
         llm_model: str = "ministral-3:3b",
         verbose: bool = False,
+        human_in_the_loop: bool = False,
     ):
         self.llm_provider = llm_provider
         self.llm_model = llm_model
         self.verbose = verbose
+        self.human_in_the_loop = human_in_the_loop
         self.router = QueryRouter()
         self.pipeline = RAGPipeline()
         self._crew: Optional[ResearchCrew] = None
@@ -34,6 +36,7 @@ class ResearchAssistant:
                 router=self.router,
                 pipeline=self.pipeline,
                 verbose=self.verbose,
+                human_in_the_loop=self.human_in_the_loop,
             )
         return self._crew
 
@@ -75,6 +78,7 @@ class ResearchAssistant:
             "llm_model": self.llm_model,
             "indexed_chunks": self.get_indexed_count(),
             "verbose": self.verbose,
+            "human_in_the_loop": self.human_in_the_loop,
         }
 
 
@@ -82,10 +86,12 @@ def create_research_assistant(
     llm_provider: str = "ollama",
     llm_model: str = "ministral-3:3b",
     verbose: bool = False,
+    human_in_the_loop: bool = False,
 ) -> ResearchAssistant:
     """Factory function to create a ResearchAssistant instance."""
     return ResearchAssistant(
         llm_provider=llm_provider,
         llm_model=llm_model,
         verbose=verbose,
+        human_in_the_loop=human_in_the_loop,
     )
