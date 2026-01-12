@@ -1,5 +1,7 @@
 import os
 import traceback
+import json
+from datetime import datetime
 
 import streamlit as st
 
@@ -8,6 +10,7 @@ from src.prompts import PromptManager, PromptStrategy
 from src.routing import QueryRouter, RoutingMode
 from src.routing.strategies import MODEL_REGISTRY
 from src.rag import RAGPipeline
+from src.agents import create_research_assistant, ResearchResult
 
 st.set_page_config(
     page_title="Research Assistant",
@@ -28,6 +31,12 @@ if "rag_pipeline" not in st.session_state:
     st.session_state.rag_pipeline = RAGPipeline()
 if "last_rag_context" not in st.session_state:
     st.session_state.last_rag_context = None
+if "agent_steps" not in st.session_state:
+    st.session_state.agent_steps = []
+if "last_research_result" not in st.session_state:
+    st.session_state.last_research_result = None
+if "research_assistant" not in st.session_state:
+    st.session_state.research_assistant = None
 
 ALL_MODELS = {
     "Auto Route (Recommended)": "auto",
@@ -40,6 +49,62 @@ ALL_MODELS = {
     "Mistral: medium-latest": ("mistral", "mistral-medium-latest"),
     "OpenRouter: gpt-4o": ("openrouter", "openai/gpt-4o"),
 }
+
+
+def export_to_markdown(result: ResearchResult) -> str:
+    md = f"# Research Result\n\n"
+    md += f"**Query:** {result.query}\n\n"
+    md += f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    md += f"---\n\n"
+    md += f"## Answer\n\n{result.answer}\n\n"
+    md += f"---\n\n"
+    md += f"## Metadata\n\n"
+    md += f"- **Used RAG:** {result.used_rag}\n"
+    md += f"- **Complexity Score:** {result.complexity_score}/100\n"
+    md += f"- **Strategy:** {result.strategy}\n"
+    if result.citations:
+        md += f"\n## Citations\n\n"
+        for citation in result.citations:
+            md += f"- {citation}\n"
+    return md
+
+
+def export_to_pdf_content(result: ResearchResult) -> str:
+    content = f"RESEARCH RESULT\n{'='*50}\n\n"
+    content += f"Query: {result.query}\n"
+    content += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+    content += f"{'='*50}\n"
+    content += f"ANSWER\n{'='*50}\n\n"
+    content += f"{result.answer}\n\n"
+    content += f"{'='*50}\n"
+    content += f"METADATA\n{'='*50}\n\n"
+    content += f"Used RAG: {result.used_rag}\n"
+    content += f"Complexity Score: {result.complexity_score}/100\n"
+    content += f"Strategy: {result.strategy}\n"
+    if result.citations:
+        content += f"\n{'='*50}\n"
+        content += f"CITATIONS\n{'='*50}\n\n"
+        for citation in result.citations:
+            content += f"- {citation}\n"
+    return content
+
+
+def render_agent_steps(steps: list):
+    if not steps:
+        return
+    st.subheader("Agent Workflow")
+    cols = st.columns(len(steps))
+    for i, (step, col) in enumerate(zip(steps, cols)):
+        with col:
+            status_icon = {"completed": "[OK]", "in_progress": "[...]", "pending": "[ ]"}.get(step["status"], "[ ]")
+            if step["status"] == "completed":
+                st.success(f"{status_icon} {step['name']}")
+            elif step["status"] == "in_progress":
+                st.warning(f"{status_icon} {step['name']}")
+            else:
+                st.info(f"{status_icon} {step['name']}")
+            if step.get("details"):
+                st.caption(step["details"])
 
 
 def main():
@@ -157,6 +222,37 @@ def main():
             chunking_strategy = "fixed"
 
         st.markdown("---")
+        st.subheader("Multi-Agent Mode")
+        use_agents = st.toggle(
+            "Enable Multi-Agent System",
+            value=False,
+            help="Use Planner, Retrieval, and Synthesis agents for complex queries"
+        )
+        if use_agents:
+            agent_provider = st.selectbox(
+                "Agent Provider",
+                ["ollama", "openrouter"],
+                help="LLM provider for agents"
+            )
+            if agent_provider == "ollama":
+                agent_model = st.selectbox(
+                    "Agent Model",
+                    ["ministral-3:3b", "gemma3:1b", "deepseek-r1:1.5b"],
+                    help="Local model for agents"
+                )
+            else:
+                agent_model = st.selectbox(
+                    "Agent Model",
+                    ["openai/gpt-4o-mini", "openai/gpt-4o", "anthropic/claude-3-haiku"],
+                    help="Cloud model for agents"
+                )
+            human_in_loop = st.checkbox(
+                "Human-in-the-loop",
+                value=False,
+                help="Approve planning before execution"
+            )
+
+        st.markdown("---")
         with st.expander("Advanced Options"):
             st.markdown("**Temperature** - Controls randomness in responses")
             st.caption("Lower (0.0) = More focused and deterministic")
@@ -197,6 +293,61 @@ def main():
         if st.button("Generate Response", type="primary", use_container_width=True):
             if not user_query.strip():
                 st.warning("Please enter a query.")
+            elif use_agents:
+                st.session_state.agent_steps = [
+                    {"name": "Planner", "status": "in_progress", "details": "Analyzing query..."},
+                    {"name": "Retrieval", "status": "pending", "details": ""},
+                    {"name": "Synthesis", "status": "pending", "details": ""},
+                ]
+                render_agent_steps(st.session_state.agent_steps)
+
+                with st.spinner("Running multi-agent workflow..."):
+                    try:
+                        if st.session_state.research_assistant is None:
+                            st.session_state.research_assistant = create_research_assistant(
+                                llm_provider=agent_provider,
+                                llm_model=agent_model,
+                                verbose=False,
+                                human_in_the_loop=human_in_loop,
+                            )
+                        assistant = st.session_state.research_assistant
+
+                        st.session_state.agent_steps[0]["status"] = "completed"
+                        st.session_state.agent_steps[0]["details"] = "Query analyzed"
+                        st.session_state.agent_steps[1]["status"] = "in_progress"
+                        st.session_state.agent_steps[1]["details"] = "Searching documents..."
+
+                        result = assistant.query(user_query)
+                        st.session_state.last_research_result = result
+
+                        st.session_state.agent_steps[1]["status"] = "completed"
+                        st.session_state.agent_steps[1]["details"] = f"RAG: {result.used_rag}"
+                        st.session_state.agent_steps[2]["status"] = "completed"
+                        st.session_state.agent_steps[2]["details"] = "Answer generated"
+
+                        render_agent_steps(st.session_state.agent_steps)
+
+                        st.markdown("### Response")
+                        st.markdown(result.answer)
+
+                        st.markdown("---")
+                        st.markdown("### Research Metadata")
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        with col_m1:
+                            st.metric("Complexity", f"{result.complexity_score}/100")
+                        with col_m2:
+                            st.metric("Used RAG", str(result.used_rag))
+                        with col_m3:
+                            st.metric("Strategy", result.strategy[:20] + "..." if len(result.strategy) > 20 else result.strategy)
+
+                        if result.citations:
+                            st.markdown("### Citations")
+                            for citation in result.citations:
+                                st.caption(f"- {citation}")
+
+                    except Exception as e:
+                        st.error(f"Agent error: {str(e)}")
+                        st.code(traceback.format_exc())
             else:
                 if is_auto_route:
                     router = QueryRouter(mode=routing_mode)
@@ -360,6 +511,29 @@ def main():
                 key=lambda m: m.cost_per_1k_input + m.cost_per_1k_output
             )
             st.caption(f"Compared to always using {most_expensive.provider}/{most_expensive.model_name}")
+
+        if st.session_state.last_research_result:
+            st.subheader("Export Results")
+            result = st.session_state.last_research_result
+            col_exp1, col_exp2 = st.columns(2)
+            with col_exp1:
+                md_content = export_to_markdown(result)
+                st.download_button(
+                    "Download MD",
+                    data=md_content,
+                    file_name=f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                )
+            with col_exp2:
+                pdf_content = export_to_pdf_content(result)
+                st.download_button(
+                    "Download TXT",
+                    data=pdf_content,
+                    file_name=f"research_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                )
 
     if st.session_state.messages:
         st.markdown("---")
