@@ -26,7 +26,13 @@ class ChromaDBStore:
         return results
 
     def count(self) -> int:
-        return self.collection.count()
+        try:
+            return self.collection.count()
+        except chromadb.errors.NotFoundError:
+            self.collection = self.client.get_or_create_collection(
+                name="documents", metadata={"hnsw:space": "cosine"}
+            )
+            return 0
 
     def clear(self):
         self.client.delete_collection("documents")
